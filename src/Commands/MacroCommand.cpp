@@ -13,10 +13,10 @@ std::cout<<"Constructor MacroCommand: size commands "<<_commands.size()<<"\n";
         for(int i=0; i<static_cast<int>(_commands.size()); i++) {
       try
       { 
-        _commands.at(i).get()->execute(); // Вызов через указатель -> code */
+        _commands.at(i).get()->execute(); 
         
       }
-      catch(const char* exceptionMessage) { // Ловим исключение типа const char*
+      catch(const char* exceptionMessage) { 
                        std::cerr << "Error in command: " << exceptionMessage << std::endl;
        
              break; 
