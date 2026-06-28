@@ -1,0 +1,78 @@
+on:
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          submodules: true
+
+      - name: Install dependencies and download GoogleTest manually
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake build-essential debhelper dpkg-dev
+          mkdir -p external/googletest && cd external/googletest
+          git init
+          git remote add origin https://github.com/google/googletest.git
+          git fetch --depth=1 origin main
+          git checkout main
+
+      - name: Configure project with CMake (in build folder)
+        run: |
+          mkdir -p build
+          cd build
+          cmake ..
+
+      - name: Build project (build all targets)
+        run: |
+          cd build
+          cmake --build .
+
+      - name: Run Google Tests
+        run: |
+          cd build
+          ctest --output-on-failure
+
+      - name: Build package (создаем .deb)
+        id: package_step
+        run: |
+          cd build
+          cpack -C DEB
+          PACKAGE_FILE=$(ls *.deb 2>/dev/null | head -n 1)
+          if [ -z "$PACKAGE_FILE" ]; then
+            echo "Ошибка: .deb файл не найден"
+            ls -la
+            exit 1
+          fi
+          echo "package_path=$(pwd)/$PACKAGE_FILE" >> $GITHUB_OUTPUT
+          echo "package_name=$PACKAGE_FILE" >> $GITHUB_OUTPUT
+          echo "Создан файл: $PACKAGE_FILE"
+
+      - name: Verify package exists
+        run: |
+          ls -la "${{ steps.package_step.outputs.package_path }}"
+
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.run_number }}
+          release_name: Release ${{ github.run_number }}
+          draft: false
+          prerelease: false
+
+      - name: Upload Release Asset (загружаем .deb в релиз)
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ${{ steps.package_step.outputs.package_path }}
+          asset_name: ${{ steps.package_step.outputs.package_name }}
+          asset_content_type: application/vnd.debian.binary-package
